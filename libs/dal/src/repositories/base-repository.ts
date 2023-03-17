@@ -1,0 +1,139 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { ClassConstructor, plainToInstance } from 'class-transformer';
+import { Model, Types, ProjectionType, FilterQuery, UpdateQuery } from 'mongoose';
+
+export class BaseRepository<T_DBModel, T_MappedEntity, T_Enforcement = object> {
+  public _model: Model<T_DBModel>;
+
+  constructor(protected MongooseModel: Model<T_DBModel>, protected entity: ClassConstructor<T_MappedEntity>) {
+    this._model = MongooseModel;
+  }
+
+  public static createObjectId() {
+    return new Types.ObjectId().toString();
+  }
+
+  protected convertObjectIdToString(value: Types.ObjectId): string {
+    return value.toString();
+  }
+
+  protected convertStringToObjectId(value: string): Types.ObjectId {
+    return new Types.ObjectId(value);
+  }
+
+  async count(query: FilterQuery<T_DBModel> & T_Enforcement, limit?: number): Promise<number> {
+    return this.MongooseModel.countDocuments(query, {
+      limit,
+    });
+  }
+
+  async aggregate(query: any[]): Promise<any> {
+    return await this.MongooseModel.aggregate(query);
+  }
+
+  async findById(id: string, select?: string): Promise<T_MappedEntity | null> {
+    const data = await this.MongooseModel.findById(id, select);
+    if (!data) return null;
+
+    return this.mapEntity(data.toObject());
+  }
+
+  async findOne(query: FilterQuery<T_DBModel> & T_Enforcement, select?: ProjectionType<T_MappedEntity>) {
+    const data = await this.MongooseModel.findOne(query, select);
+    if (!data) return null;
+
+    return this.mapEntity(data.toObject());
+  }
+
+  async delete(query: FilterQuery<T_DBModel> & T_Enforcement): Promise<void> {
+    return await this.MongooseModel.remove(query);
+  }
+
+  async find(
+    query: FilterQuery<T_DBModel> & T_Enforcement,
+    select: ProjectionType<T_MappedEntity> = '',
+    options: { limit?: number; sort?: any; skip?: number } = {}
+  ): Promise<T_MappedEntity[]> {
+    const data = await this.MongooseModel.find(query, select, {
+      sort: options.sort || null,
+    })
+      .skip(options.skip as number)
+      .limit(options.limit as number)
+      .lean()
+      .exec();
+
+    return this.mapEntities(data);
+  }
+
+  async *findBatch(
+    query: FilterQuery<T_DBModel> & T_Enforcement,
+    select = '',
+    options: { limit?: number; sort?: any; skip?: number } = {},
+    batchSize = 500
+  ) {
+    for await (const doc of this._model
+      .find(query, select, {
+        sort: options.sort || null,
+      })
+      .batchSize(batchSize)
+      .cursor()) {
+      yield this.mapEntity(doc);
+    }
+  }
+
+  async create(data: FilterQuery<T_DBModel> & T_Enforcement): Promise<T_MappedEntity> {
+    const newEntity = new this.MongooseModel(data);
+    const saved = await newEntity.save();
+
+    return this.mapEntity(saved);
+  }
+
+  async insertMany(
+    data: FilterQuery<T_DBModel> & T_Enforcement[]
+  ): Promise<{ acknowledged: boolean; insertedCount: number; insertedIds: Types.ObjectId[] }> {
+    const result = await this.MongooseModel.insertMany(data, { ordered: false });
+
+    const insertedIds = result.map((inserted) => inserted._id);
+
+    return {
+      acknowledged: true,
+      insertedCount: result.length,
+      insertedIds,
+    };
+  }
+
+  async update(
+    query: FilterQuery<T_DBModel> & T_Enforcement,
+    updateBody: UpdateQuery<T_DBModel>
+  ): Promise<{
+    matched: number;
+    modified: number;
+  }> {
+    const saved = await this.MongooseModel.updateMany(query, updateBody, {
+      multi: true,
+    });
+
+    return {
+      matched: saved.matchedCount,
+      modified: saved.modifiedCount,
+    };
+  }
+
+  async upsertMany(data: (FilterQuery<T_DBModel> & T_Enforcement)[]) {
+    const promises = data.map((entry) => this.MongooseModel.findOneAndUpdate(entry, entry, { upsert: true }));
+
+    return await Promise.all(promises);
+  }
+
+  async bulkWrite(bulkOperations: any) {
+    await this.MongooseModel.bulkWrite(bulkOperations);
+  }
+
+  protected mapEntity<TData>(data: TData): TData extends null ? null : T_MappedEntity {
+    return plainToInstance(this.entity, JSON.parse(JSON.stringify(data))) as any;
+  }
+
+  protected mapEntities(data: any): T_MappedEntity[] {
+    return plainToInstance<T_MappedEntity, T_MappedEntity[]>(this.entity, JSON.parse(JSON.stringify(data)));
+  }
+}
