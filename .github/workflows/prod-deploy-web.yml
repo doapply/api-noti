@@ -71,7 +71,7 @@ jobs:
         run: npm run build
 
       - name: Deploy WEB to PROD
-        uses: nwtgck/actions-netlify@v1.2
+        uses: nwtgck/actions-netlify@v2.0
         with:
           publish-dir: apps/web/build
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -146,7 +146,7 @@ jobs:
         run: npm run build
 
       - name: Deploy WEB to PROD
-        uses: nwtgck/actions-netlify@v1.2
+        uses: nwtgck/actions-netlify@v2.0
         with:
           publish-dir: apps/web/build
           github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -31,7 +31,7 @@ jobs:
         run: CI='' npm run build:prod
 
       - name: Deploy EMBED to PROD
-        uses: nwtgck/actions-netlify@v1.2
+        uses: nwtgck/actions-netlify@v2.0
         with:
           publish-dir: libs/embed/dist
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,7 @@ jobs:
         run: CI='' npm run build:prod
 
       - name: Deploy EMBED to PROD
-        uses: nwtgck/actions-netlify@v1.2
+        uses: nwtgck/actions-netlify@v2.0
         with:
           publish-dir: libs/embed/dist
           github-token: ${{ secrets.GITHUB_TOKEN }}
